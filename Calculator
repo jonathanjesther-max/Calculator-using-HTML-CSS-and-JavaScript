@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Calculatrice</title>
+<style>
+  :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f3f4f6;}
+  .calc{width:320px;background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.12);padding:12px;}
+  .display{height:64px;background:#0b1221;color:#fff;border-radius:8px;padding:10px;font-size:24px;display:flex;align-items:center;justify-content:flex-end;overflow:hidden;}
+  .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;}
+  button{height:56px;border-radius:8px;border:0;font-size:18px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.06);}
+  .op{background:#fde68a}
+  .fn{background:#e2e8f0}
+  .num{background:#f8fafc}
+  button:active{transform:translateY(1px)}
+</style>
+</head>
+<body>
+  <div class="calc" role="application" aria-label="Calculatrice simple">
+    <div id="display" class="display" aria-live="polite">0</div>
+    <div class="keys">
+      <button class="fn" data-action="clear">C</button>
+      <button class="fn" data-action="back">⌫</button>
+      <button class="fn" data-action="sign">±</button>
+      <button class="op" data-value="/">÷</button>
+
+      <button class="num" data-value="7">7</button>
+      <button class="num" data-value="8">8</button>
+      <button class="num" data-value="9">9</button>
+      <button class="op" data-value="*">×</button>
+
+      <button class="num" data-value="4">4</button>
+      <button class="num" data-value="5">5</button>
+      <button class="num" data-value="6">6</button>
+      <button class="op" data-value="-">−</button>
+
+      <button class="num" data-value="1">1</button>
+      <button class="num" data-value="2">2</button>
+      <button class="num" data-value="3">3</button>
+      <button class="op" data-value="+">+</button>
+
+      <button class="num" data-value="0" style="grid-column:span(2)">0</button>
+      <button class="num" data-value=".">.</button>
+      <button class="op" data-action="equals">=</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const displayEl = document.getElementById('display');
+  let expr = '0';
+
+  function updateDisplay() {
+    displayEl.textContent = expr;
+  }
+
+  function isOperator(ch){ return ['+','-','*','/'].includes(ch); }
+
+  function inputDigit(d){
+    if(expr === '0' && d !== '.') expr = d;
+    else {
+      // prevent multiple decimals in current number
+      if(d === '.'){
+        // find last operator
+        const lastOpIdx = Math.max(...['+','-','*','/'].map(o=>expr.lastIndexOf(o)));
+        const current = expr.slice(lastOpIdx+1);
+        if(current.includes('.')) return;
+      }
+      expr += d;
+    }
+    updateDisplay();
+  }
+
+  function inputOperator(op){
+    if(expr === '') return;
+    const lastChar = expr.slice(-1);
+    if(isOperator(lastChar)) {
+      // replace last operator
+      expr = expr.slice(0,-1) + op;
+    } else {
+      expr += op;
+    }
+    updateDisplay();
+  }
+
+  function clearAll(){ expr = '0'; updateDisplay(); }
+
+  function backspace(){
+    if(expr.length <= 1){ expr = '0'; }
+    else { expr = expr.slice(0,-1); }
+    updateDisplay();
+  }
+
+  function toggleSign(){
+    // find last number start
+    let i = expr.length - 1;
+    while(i >= 0 && !isOperator(expr[i])) i--;
+    const start = i + 1;
+    const num = expr.slice(start);
+    if(!num) return;
+    if(num.startsWith('-')) {
+      expr = expr.slice(0, start) + num.slice(1);
+    } else {
+      expr = expr.slice(0, start) + '(-' + num + ')';
+    }
+    updateDisplay();
+  }
+
+  function safeEval(s){
+    // basic validation: no letters, balanced parentheses
+    if(/[^0-9+\-*/().\s]/.test(s)) throw new Error('Invalid chars');
+    // Eval via Function (safer than eval) but still cautious
+    // Replace ×/÷ if present (not here), then evaluate
+    // Prevent trailing operator
+    if(isOperator(s.trim().slice(-1))) throw new Error('Trailing operator');
+    // limit length
+    if(s.length > 200) throw new Error('Expression too long');
+    // Evaluate
+    return Function('"use strict"; return (' + s + ')')();
+  }
+
+  function calculate(){
+    try{
+      const res = safeEval(expr);
+      // Format: if integer show as int else round to 10 dec then trim
+      if(!isFinite(res)) throw new Error('Math error');
+      expr = Number.isInteger(res) ? String(res) : String(Number(res.toFixed(10)));
+    }catch(e){
+      expr = 'Error';
+    }
+    updateDisplay();
+  }
+
+  document.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const v = btn.dataset.value;
+      const a = btn.dataset.action;
+      if(a === 'clear') clearAll();
+      else if(a === 'back') backspace();
+      else if(a === 'sign') toggleSign();
+      else if(a === 'equals') calculate();
+      else if(v){
+        if(['+','-','*','/'].includes(v)) inputOperator(v);
+        else inputDigit(v);
+      }
+    });
+  });
+
+  // Keyboard support
+  window.addEventListener('keydown', (e)=>{
+    if(e.key >= '0' && e.key <= '9') { inputDigit(e.key); e.preventDefault(); }
+    else if(e.key === '.') { inputDigit('.'); e.preventDefault(); }
+    else if(['+','-','*','/'].includes(e.key)) { inputOperator(e.key); e.preventDefault(); }
+    else if(e.key === 'Enter' || e.key === '=') { calculate(); e.preventDefault(); }
+    else if(e.key === 'Backspace') { backspace(); e.preventDefault(); }
+    else if(e.key.toLowerCase() === 'c') { clearAll(); }
+  });
+
+  updateDisplay();
+})();
+</script>
+</body>
+</html>
